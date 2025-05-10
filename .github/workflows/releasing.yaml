@@ -1,45 +1,29 @@
-name: Publish Helm Chart to GHCR (Prod)
+name: Release Charts
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
-  publish:
+  release:
+    # depending on default permission settings for your org (contents being read-only or read-write for workloads), you will have to add permissions
+    # see: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          version: v3.14.0
+          fetch-depth: 0
 
-      - name: Install yq
-        uses: mikefarah/yq@v4
-
-      - name: Read chart version
-        id: chart
+      - name: Configure Git
         run: |
-          echo "version=$(yq -r '.version' charts/opencloud/Chart.yaml)" >> $GITHUB_OUTPUT
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
-      - name: Log in to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
-            --username "${{ github.actor }}" --password-stdin
-
-      - name: Package & Push chart
-        run: |
-          # Package the chart from repo root (where Chart.yaml lives)
-          helm package charts/opencloud --destination .
-
-          # Push to GHCR under opencloud
-          TARBALL="opencloud-${{ steps.chart.outputs.version }}.tgz"
-          helm push "$TARBALL" oci://ghcr.io/thatfave/opencloud-helm
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
